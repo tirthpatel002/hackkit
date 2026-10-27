@@ -14,6 +14,7 @@ export {
 } from "./backoff.js";
 export {
   defineConfig,
+  parseConfig,
   loadConfig,
   loadConfigSync,
   getConfig,
@@ -43,6 +44,33 @@ export {
 } from "./log.js";
 export * from "./types.js";
 export * from "./errors.js";
+export {
+  type Provider,
+  type ProviderChatResult,
+} from "./providers/base.js";
+export {
+  OpenAICompatProvider,
+  type OpenAICompatConfig,
+  mapOpenAIError,
+} from "./providers/openaiCompat.js";
+export {
+  NebiusProvider,
+  NEBIUS_DEFAULT_BASE_URL,
+  NEBIUS_DEFAULT_KEY_ENV,
+} from "./providers/nebius.js";
+export {
+  MetaProvider,
+  META_DEFAULT_BASE_URL,
+  META_DEFAULT_KEY_ENV,
+} from "./providers/meta.js";
+export {
+  AgyCliProvider,
+  agyChat,
+  flatten,
+  label,
+  parseBestEffortJson,
+  type AgyConfig,
+} from "./providers/agyCli.js";
 export {
   QlooClient,
   type QlooEntity,

@@ -1,0 +1,6 @@
+adapter: src/adapter.ts:runCase
+check_plugins: [src/checks.ts]
+cases: cases/
+concurrency: 8
+case_timeout_s: 30
+judge_model: judge

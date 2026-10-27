@@ -26,9 +26,15 @@ export async function runSmoke(
 ): Promise<number> {
   const effectiveEnv = env ?? process.env;
 
-  // Parse --only
+  // Parse --only and --skip
   let onlyFilter: string | null = null;
+  const skipIds = new Set<string>();
   for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === "--skip" && argv[i + 1]) {
+      skipIds.add(argv[i + 1]!.trim().toLowerCase().replace(/[_:]/g, "-"));
+      i++;
+      continue;
+    }
     if (argv[i] === "--only" && argv[i + 1]) {
       onlyFilter = argv[i + 1]!.trim().toLowerCase().replace(/[_:]/g, "-");
       i++;
@@ -172,7 +178,11 @@ export async function runSmoke(
     const pCol = check.provider.padEnd(8);
     const kCol = check.kind.padEnd(7);
 
-    const skipReason = check.checkSkip ? await check.checkSkip() : null;
+    const skipReason = skipIds.has(check.id)
+      ? "skip (--skip)"
+      : check.checkSkip
+        ? await check.checkSkip()
+        : null;
     if (skipReason) {
       out.log(`${pCol}${kCol}${skipReason}`);
       continue;

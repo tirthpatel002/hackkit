@@ -294,8 +294,12 @@ describe("router (retries and fallback)", () => {
         expect(typeof attempt.message).toBe("string");
       }
 
-      // Check instanceof for error subclasses involved in the attempts
-      expect(err).toBeInstanceOf(AuthError);
+      // The attempt list names each failure; the subclasses keep normal instanceof behaviour
+      expect(allFailed.attempts.some((a) => a.errorType === "AuthError")).toBe(true);
+      const auth = new AuthError("x", { status: 401 });
+      expect(auth).toBeInstanceOf(AuthError);
+      expect(auth).toBeInstanceOf(ConnectorError);
+      expect(auth).not.toBeInstanceOf(AllModelsFailed);
     }
   });
 

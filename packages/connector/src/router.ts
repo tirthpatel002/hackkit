@@ -23,34 +23,9 @@ import {
 } from "./errors.js";
 import type { Provider } from "./providers/base.js";
 import { NebiusProvider } from "./providers/nebius.js";
+import { MetaProvider } from "./providers/meta.js";
+import { AgyCliProvider } from "./providers/agyCli.js";
 import { computeBackoffMs, sleep } from "./backoff.js";
-
-// Hook Symbol.hasInstance on error classes so AllModelsFailed can satisfy instanceof checks
-// for the error subclasses that caused the failure, matching the spec:
-// "Unit: all fail throws AllModelsFailed listing every attempt; instanceof works for each Error subclass."
-const errorClassNames = [
-  { cls: AuthError, name: "AuthError" },
-  { cls: RateLimitError, name: "RateLimitError" },
-  { cls: ProviderTimeout, name: "ProviderTimeout" },
-  { cls: ProviderError, name: "ProviderError" },
-];
-
-for (const { cls, name } of errorClassNames) {
-  Object.defineProperty(cls, Symbol.hasInstance, {
-    value: function (inst: unknown): boolean {
-      if (inst instanceof ConnectorError && inst.constructor.name === name) return true;
-      if (
-        inst instanceof AllModelsFailed &&
-        inst.attempts.some((a) => a.errorType === name)
-      ) {
-        return true;
-      }
-      return false;
-    },
-    configurable: true,
-    writable: true,
-  });
-}
 
 export type ProviderFactory = (
   resolved: ResolvedModel,
@@ -91,6 +66,20 @@ function getProvider(
       timeoutMs: config.providers.nebius.timeoutMs,
       ...(opts?.fetch !== undefined ? { fetch: opts.fetch } : {}),
     });
+  }
+
+  if (resolved.provider === "meta") {
+    getProviderApiKey("meta", config);
+    return new MetaProvider({
+      baseUrl: config.providers.meta.baseUrl,
+      keyEnv: config.providers.meta.keyEnv,
+      timeoutMs: config.providers.meta.timeoutMs,
+      ...(opts?.fetch !== undefined ? { fetch: opts.fetch } : {}),
+    });
+  }
+
+  if (resolved.provider === "agy-cli") {
+    return new AgyCliProvider(config.providers["agy-cli"]);
   }
 
   throw new ConfigError(`Provider "${resolved.provider}" is not supported or not configured`, {
@@ -163,6 +152,7 @@ export async function chat(
   const attemptsHistory: { model: string; errorType: string; status?: number; message: string }[] = [];
   let lastRateLimitRetryAfterMs: number | undefined;
   let overallAttempt = 0;
+  let lastError: ConnectorError | undefined;
 
   for (let candidateIdx = 0; candidateIdx < candidates.length; candidateIdx++) {
     const candidate = candidates[candidateIdx]!;
@@ -193,6 +183,7 @@ export async function chat(
         ...(connectorErr.opts.status !== undefined ? { status: connectorErr.opts.status } : {}),
       };
       attemptsHistory.push(attemptRecord);
+      lastError = connectorErr;
 
       const hasMore = hasRemainingFallback(candidates, candidateIdx, failedProviders, config);
       appendLog({
@@ -264,6 +255,7 @@ export async function chat(
           ...(connectorErr.opts.status !== undefined ? { status: connectorErr.opts.status } : {}),
         };
         attemptsHistory.push(attemptRecord);
+      lastError = connectorErr;
 
         const hasMore = hasRemainingFallback(candidates, candidateIdx, failedProviders, config);
         appendLog({
@@ -298,6 +290,7 @@ export async function chat(
       try {
         const result = await provider.chat(resolved.modelId, messages, opts);
         const latencyMs = Date.now() - attemptStartTime;
+        const isCli = resolved.provider === "agy-cli";
         const { costUsd, priceMissing } = calculateCost(
           resolved.fullName,
           result.tokensIn,
@@ -317,33 +310,35 @@ export async function chat(
           fallback_index: candidateIdx,
           status: "ok",
           error_type: null,
-          http_status: result.httpStatus ?? 200,
-          tokens_in: result.tokensIn,
-          tokens_cached: result.tokensCached,
-          tokens_out: result.tokensOut,
-          cost_usd: costUsd,
+          http_status: isCli ? null : (result.httpStatus ?? 200),
+          ...(isCli ? { exit_code: result.exitCode ?? 0 } : {}),
+          tokens_in: isCli ? null : result.tokensIn,
+          tokens_cached: isCli ? null : result.tokensCached,
+          tokens_out: isCli ? null : result.tokensOut,
+          cost_usd: isCli ? null : costUsd,
           latency_ms: latencyMs,
           n_messages: nMessages,
           n_tools: nTools,
           json_mode: jsonMode,
           prompt_sha: promptSha,
           error: null,
-          ...(priceMissing ? { warning: "price_missing" } : {}),
+          ...(priceMissing && !isCli ? { warning: "price_missing" } : {}),
         });
 
         return createReply({
           text: result.text,
           toolCalls: result.toolCalls,
-          tokensIn: result.tokensIn,
-          tokensOut: result.tokensOut,
-          costUsd,
+          tokensIn: isCli ? null : result.tokensIn,
+          tokensOut: isCli ? null : result.tokensOut,
+          costUsd: isCli ? null : costUsd,
           latencyMs,
           model: resolved.fullName,
-          tokensCached: result.tokensCached,
+          tokensCached: isCli ? null : result.tokensCached,
           fallbackUsed: candidateIdx > 0,
           attempts: overallAttempt,
           callId,
           raw: result.raw,
+          json: result.json,
         });
       } catch (err) {
         const latencyMs = Date.now() - attemptStartTime;
@@ -364,6 +359,7 @@ export async function chat(
           ...(status !== null && status !== undefined ? { status } : {}),
         };
         attemptsHistory.push(attemptRecord);
+      lastError = connectorErr;
 
         // 400/404/413/422, tool-call parse error, or tools sent to CLI: No retry, no fallback!
         if (connectorErr instanceof BadRequestError || connectorErr instanceof BadJSONError) {
@@ -489,13 +485,19 @@ export async function chat(
     }
   }
 
+  // A chain of one model (no fallback configured) rethrows that model's own error,
+  // so callers can catch AuthError, RateLimitError, etc. directly.
+  if (candidates.length === 1 && lastError) {
+    throw lastError;
+  }
+
   const allFailed = new AllModelsFailed(
     `All models failed for requested "${model}": ${attemptsHistory.map((a) => `${a.model} (${a.errorType})`).join(", ")}`,
-    { model },
+    { model, ...(lastError ? { cause: lastError } : {}) },
   );
   allFailed.attempts = attemptsHistory;
   if (lastRateLimitRetryAfterMs !== undefined) {
-    (allFailed as RateLimitError).retryAfterMs = lastRateLimitRetryAfterMs;
+    (allFailed as AllModelsFailed & { retryAfterMs?: number }).retryAfterMs = lastRateLimitRetryAfterMs;
   }
   throw allFailed;
 }

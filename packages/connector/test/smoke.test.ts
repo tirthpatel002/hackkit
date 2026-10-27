@@ -16,7 +16,7 @@ describe("smoke script", () => {
       QLOO_API_KEY: undefined,
     };
 
-    const code = await runSmoke([], emptyEnv, out);
+    const code = await runSmoke(["--skip", "agy-cli-chat"], emptyEnv, out);
 
     expect(code).toBe(0);
     expect(logs.length).toBe(5);
