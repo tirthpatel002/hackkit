@@ -3,6 +3,7 @@ import { register } from "tsx/esm/api";
 register();
 
 import { loadCases } from "./cases.js";
+import { compare } from "./compare.js";
 import { ConfigError } from "./errors.js";
 import { listChecks } from "./registry.js";
 import type { RunOptions } from "./types.js";
@@ -61,7 +62,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
   const command = flags.positional[0];
 
   if (!command) {
-    console.error("Usage: harness <run|list|list-checks> [project] [options]");
+    console.error("Usage: harness <run|compare|list|list-checks> [project] [options]");
     return 2;
   }
 
@@ -77,6 +78,16 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
 
     const hasFailures = results.summary.failed > 0 || results.summary.errored > 0;
     return hasFailures ? 1 : 0;
+  }
+
+  if (command === "compare") {
+    const fileA = flags.positional[1];
+    const fileB = flags.positional[2];
+    if (!fileA || !fileB) {
+      throw new ConfigError("Usage: harness compare <fileA.json> <fileB.json>");
+    }
+    await compare(fileA, fileB);
+    return 0;
   }
 
   if (command === "list") {
@@ -116,7 +127,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     return 0;
   }
 
-  throw new ConfigError(`Unknown command: "${command}". Expected run, list, or list-checks.`);
+  throw new ConfigError(`Unknown command: "${command}". Expected run, compare, list, or list-checks.`);
 }
 
 // Only execute directly when run from CLI (not when imported in tests)

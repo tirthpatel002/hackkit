@@ -135,8 +135,9 @@ export function formatTerminalReport(
   const passPct = (summary.pass_rate * 100).toFixed(1);
   const wallTimeStr = `${summary.wall_time_s.toFixed(2)}s`;
   const totalCostStr = `$${summary.cost_usd.toFixed(4)}`;
+  const judgeCostStr = `$${summary.judge_cost_usd.toFixed(4)}`;
 
-  output += `Summary: ${summary.passed}/${summary.total} passed (${passPct}%) | Cost: ${totalCostStr} | Wall time: ${wallTimeStr}\n`;
+  output += `Summary: ${summary.passed}/${summary.total} passed (${passPct}%) | Cost: ${totalCostStr} | Judge cost: ${judgeCostStr} | Wall time: ${wallTimeStr}\n`;
 
   return output;
 }

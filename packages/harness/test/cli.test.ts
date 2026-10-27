@@ -1,12 +1,19 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { main } from "../src/cli.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const echoProjectDir = path.resolve(__dirname, "../examples/echo");
 
 describe("cli end-to-end", () => {
+  beforeAll(() => {
+    process.env.HARNESS_FAKE_JUDGE = "1";
+  });
+
+  afterAll(() => {
+    delete process.env.HARNESS_FAKE_JUDGE;
+  });
   it("runs examples/echo and returns exit code 0", async () => {
     delete process.env.ECHO_PLANT_FAIL;
     const code = await main(["run", echoProjectDir, "--concurrency", "4"]);

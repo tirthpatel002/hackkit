@@ -34,5 +34,12 @@ export const runCase: RunCase = async (input, ctx): Promise<CaseOutput> => {
     return { text: "Paris." };
   }
 
+  if (input.question === "Why is the sky blue? One sentence.") {
+    return {
+      text: "Sunlight scatters off air molecules and blue light scatters most.",
+      data: { sentences: "1" },
+    };
+  }
+
   return { text: "default echo answer" };
 };

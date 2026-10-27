@@ -12,3 +12,10 @@
   check:
     - {type: contains, value: "Paris"}
     - {type: contains, value: ["London", "Berlin"], all_of: false, negate: true}
+
+- id: echo-003-explain
+  input: {question: "Why is the sky blue? One sentence."}
+  expect: "Sunlight scatters off air molecules and blue light scatters most."
+  check:
+    - {type: judge, rubric: matches-expected, pass_score: 4}
+    - {type: exact, field: "data.sentences", value: "1"}

@@ -1,6 +1,7 @@
 import { ConfigError } from "./errors.js";
 import type { CheckPlugin } from "./types.js";
 import { exactPlugin, containsPlugin, customPlugin } from "./checks/builtin.js";
+import { judgePlugin } from "./checks/judge.js";
 
 const registry = new Map<string, CheckPlugin<any>>();
 
@@ -27,6 +28,7 @@ export function resetRegistry(): void {
   registerCheck(exactPlugin);
   registerCheck(containsPlugin);
   registerCheck(customPlugin);
+  registerCheck(judgePlugin);
 }
 
 // Register built-ins initially
