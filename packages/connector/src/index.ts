@@ -1,4 +1,17 @@
-export { chat } from "./router.js";
+export {
+  chat,
+  registerProvider,
+  unregisterProvider,
+  clearProviderRegistry,
+  type ProviderFactory,
+} from "./router.js";
+export { embed } from "./embed.js";
+export {
+  computeBackoffMs,
+  parseRetryAfter,
+  sleep,
+  type BackoffOptions,
+} from "./backoff.js";
 export {
   defineConfig,
   loadConfig,
