@@ -17,6 +17,12 @@ describe("registry", () => {
     expect(getCheck("exact")).toBeDefined();
     expect(getCheck("contains")).toBeDefined();
     expect(getCheck("custom")).toBeDefined();
+    expect(getCheck("judge")).toBeDefined();
+    expect(getCheck("toolCalled")).toBeDefined();
+    expect(getCheck("toolNotCalled")).toBeDefined();
+    expect(getCheck("order")).toBeDefined();
+    expect(getCheck("maxSteps")).toBeDefined();
+    expect(getCheck("finalOutput")).toBeDefined();
   });
 
   it("registerCheck adds a new check plugin", () => {

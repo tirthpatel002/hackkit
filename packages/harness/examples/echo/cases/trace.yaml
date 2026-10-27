@@ -1,0 +1,9 @@
+- id: agent-001-search-then-compute
+  kind: trace
+  input: {task: "Find the population of Pune and divide it by 1000."}
+  check:
+    - {type: toolCalled, tool: "search", min: 1}
+    - {type: toolNotCalled, tool: "delete_file"}
+    - {type: order, tools: ["search", "calculator"]}
+    - {type: maxSteps, value: 8}
+    - {type: finalOutput, check: {type: contains, value: "thousand"}}

@@ -1,5 +1,6 @@
 adapter: src/adapter.ts:runCase
-check_plugins: [src/checks.ts]
+agent_adapter: src/agent.ts:runAgent
+check_plugins: [src/checks.ts, src/plugins/maxLength.ts]
 cases: cases/
 concurrency: 8
 case_timeout_s: 30

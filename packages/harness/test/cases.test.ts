@@ -4,14 +4,15 @@ import { describe, expect, it } from "vitest";
 import { loadCases, validateCase } from "../src/cases.js";
 import { ConfigError } from "../src/errors.js";
 import { registerCheck, resetRegistry } from "../src/registry.js";
-import { z } from "zod";
+import { loadCheckPlugins, loadHarnessConfig } from "../src/runner.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const echoProjectDir = path.resolve(__dirname, "../examples/echo");
 
 describe("cases loader", () => {
-  it("accepts echo basic cases", () => {
+  it("accepts echo basic cases", async () => {
     resetRegistry();
+    await loadCheckPlugins(["src/plugins/maxLength.ts"], echoProjectDir);
     const cases = loadCases("cases/basic.yaml", echoProjectDir);
     expect(cases.length).toBe(3);
     expect(cases[0]?.id).toBe("echo-001-shout");
@@ -19,14 +20,70 @@ describe("cases loader", () => {
     expect(cases[0]?.check.length).toBe(2);
     expect(cases[1]?.id).toBe("echo-002-capital");
     expect(cases[1]?.tags).toEqual(["smoke"]);
+    expect(cases[1]?.check.some((c) => c.type === "maxLength")).toBe(true);
     expect(cases[2]?.id).toBe("echo-003-explain");
     expect(cases[2]?.check.some((c) => c.type === "judge")).toBe(true);
   });
 
-  it("loads from a directory of yaml files", () => {
+  it("loads from a directory of yaml files", async () => {
     resetRegistry();
+    await loadCheckPlugins(["src/plugins/maxLength.ts"], echoProjectDir);
     const cases = loadCases("cases", echoProjectDir);
-    expect(cases.length).toBeGreaterThanOrEqual(2);
+    expect(cases.length).toBeGreaterThanOrEqual(4);
+  });
+
+  it("loader accepts the echo trace example", () => {
+    resetRegistry();
+    const cases = loadCases("cases/trace.yaml", echoProjectDir);
+    expect(cases.length).toBe(1);
+    expect(cases[0]?.id).toBe("agent-001-search-then-compute");
+    expect(cases[0]?.kind).toBe("trace");
+    expect(cases[0]?.check.map((c) => c.type)).toEqual([
+      "toolCalled",
+      "toolNotCalled",
+      "order",
+      "maxSteps",
+      "finalOutput",
+    ]);
+  });
+
+  it("plugin loaded from harness.yaml registers maxLength and a case uses it", async () => {
+    resetRegistry();
+    const config = loadHarnessConfig(echoProjectDir);
+    expect(config.check_plugins).toBeDefined();
+    await loadCheckPlugins(config.check_plugins, echoProjectDir);
+    const cases = loadCases(config.cases ?? "cases/", echoProjectDir);
+    const caseWithMaxLength = cases.find((c) =>
+      c.check.some((chk) => chk.type === "maxLength"),
+    );
+    expect(caseWithMaxLength).toBeDefined();
+    expect(caseWithMaxLength?.id).toBe("echo-002-capital");
+  });
+
+  it("rejects bad plugin options for maxLength at load time", async () => {
+    resetRegistry();
+    await loadCheckPlugins(["src/plugins/maxLength.ts"], echoProjectDir);
+    expect(() => {
+      validateCase(
+        {
+          id: "bad-plugin-opts",
+          input: {},
+          check: [{ type: "maxLength", chars: -10 }],
+        },
+        "test.yaml",
+      );
+    }).toThrow(ConfigError);
+
+    expect(() => {
+      validateCase(
+        {
+          id: "bad-plugin-opts-type",
+          input: {},
+          check: [{ type: "maxLength", chars: "not a number" as any }],
+        },
+        "test.yaml",
+      );
+    }).toThrow(ConfigError);
   });
 
   it("wraps a single check mapping into an array", () => {
@@ -61,10 +118,6 @@ describe("cases loader", () => {
     expect(() => {
       validateCase({ id: "dup-id", input: {}, check: [{ type: "exact", value: "a" }] }, "f1");
     }).not.toThrow();
-
-    // Testing loadCases with duplicate in file:
-    const tempDir = path.resolve(__dirname, "fixtures");
-    // Directly testing validation logic with duplicate id
   });
 
   it("rejects unknown check type", () => {
@@ -159,6 +212,30 @@ describe("cases loader", () => {
           kind: "answer",
           input: {},
           check: [{ type: "traceOnlyCheck" }],
+        },
+        "test.yaml",
+      );
+    }).toThrow(ConfigError);
+
+    expect(() => {
+      validateCase(
+        {
+          id: "trace-builtin-in-answer",
+          kind: "answer",
+          input: {},
+          check: [{ type: "toolCalled", tool: "search" }],
+        },
+        "test.yaml",
+      );
+    }).toThrow(ConfigError);
+
+    expect(() => {
+      validateCase(
+        {
+          id: "trace-builtin-order-in-answer",
+          kind: "answer",
+          input: {},
+          check: [{ type: "order", tools: ["search"] }],
         },
         "test.yaml",
       );
