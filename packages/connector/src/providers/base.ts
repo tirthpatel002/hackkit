@@ -8,6 +8,8 @@ export interface ProviderChatResult {
   tokensCached: number | null;
   raw: unknown;
   httpStatus?: number | undefined;
+  exitCode?: number | null | undefined;
+  json?: (<T = unknown>() => T) | undefined;
 }
 
 export interface Provider {

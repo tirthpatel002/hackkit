@@ -50,18 +50,37 @@ export interface ChatOptions {
   tag?: string | undefined;
   signal?: AbortSignal | undefined;
   fetch?: typeof fetch | undefined;
+  sleep?: ((ms: number) => Promise<void>) | undefined;
+  stop?: string | string[] | null | undefined;
+  n?: number | null | undefined;
 }
 
 export interface EmbedOptions {
   model?: string | undefined;
   dimensions?: number | undefined;
   signal?: AbortSignal | undefined;
+  fetch?: typeof fetch | undefined;
+  sleep?: ((ms: number) => Promise<void>) | undefined;
 }
 
-export function createReply(data: Omit<Reply, "json">): Reply {
+export interface EmbedResult extends Array<Float32Array> {
+  dim: number;
+  dimensions: number;
+  tokensIn: number | null;
+  costUsd: number | null;
+  vectors: Float32Array[];
+}
+
+export function createReply(
+  data: Omit<Reply, "json"> & { json?: (<T = unknown>() => T) | undefined },
+): Reply {
+  const customJson = data.json;
   return {
     ...data,
     json<T = unknown>(): T {
+      if (customJson) {
+        return customJson.call(this) as T;
+      }
       try {
         return JSON.parse(this.text) as T;
       } catch (err) {

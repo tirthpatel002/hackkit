@@ -130,13 +130,11 @@ export class OpenAICompatProvider implements Provider {
     });
   }
 
-  async chat(
+  protected prepareBody(
     modelId: string,
     messages: Message[],
     opts?: ChatOptions,
-  ): Promise<ProviderChatResult> {
-    const client = this.createClient(opts);
-
+  ): OpenAI.Chat.ChatCompletionCreateParamsNonStreaming {
     const body: OpenAI.Chat.ChatCompletionCreateParamsNonStreaming = {
       model: modelId,
       messages: messages as OpenAI.Chat.ChatCompletionMessageParam[],
@@ -154,15 +152,87 @@ export class OpenAICompatProvider implements Provider {
     if (opts?.tools && opts.tools.length > 0) {
       body.tools = opts.tools as OpenAI.Chat.ChatCompletionTool[];
     }
+    if (opts?.stop !== undefined && opts?.stop !== null) {
+      body.stop = opts.stop;
+    }
+    if (opts?.n !== undefined && opts?.n !== null) {
+      body.n = opts.n;
+    }
+
+    return body;
+  }
+
+  async chat(
+    modelId: string,
+    messages: Message[],
+    opts?: ChatOptions,
+  ): Promise<ProviderChatResult> {
+    const client = this.createClient(opts);
+    const body = this.prepareBody(modelId, messages, opts);
 
     try {
-      const completion = await client.chat.completions.create(body, {
+      let completion = await client.chat.completions.create(body, {
         signal: opts?.signal,
       });
 
-      const choice = completion.choices[0];
-      const message = choice?.message;
-      const text = message?.content ?? "";
+      let choice = completion.choices[0];
+      let message = choice?.message;
+      let text = message?.content ?? "";
+
+      let usage = completion.usage;
+      let tokensIn = usage?.prompt_tokens ?? null;
+      let tokensOut = usage?.completion_tokens ?? null;
+      const cached = (usage as unknown as { prompt_tokens_details?: { cached_tokens?: number } })
+        ?.prompt_tokens_details?.cached_tokens;
+      let tokensCached = cached ?? (tokensIn !== null ? 0 : null);
+
+      if (opts?.json && !(message?.tool_calls && message.tool_calls.length > 0 && text === "")) {
+        try {
+          JSON.parse(text);
+        } catch (initialErr) {
+          // One repair attempt with the parse error appended
+          const repairMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+            ...(messages as OpenAI.Chat.ChatCompletionMessageParam[]),
+            { role: "assistant", content: text },
+            {
+              role: "user",
+              content: `The response was not valid JSON: ${(initialErr as Error).message}. Reply with valid JSON only.`,
+            },
+          ];
+          const repairBody: OpenAI.Chat.ChatCompletionCreateParamsNonStreaming = {
+            ...body,
+            messages: repairMessages,
+          };
+          const repairCompletion = await client.chat.completions.create(repairBody, {
+            signal: opts?.signal,
+          });
+          completion = repairCompletion;
+          choice = repairCompletion.choices[0];
+          message = choice?.message;
+          const repairText = message?.content ?? "";
+
+          try {
+            JSON.parse(repairText);
+            text = repairText;
+            if (repairCompletion.usage) {
+              tokensIn = (tokensIn ?? 0) + (repairCompletion.usage.prompt_tokens ?? 0);
+              tokensOut = (tokensOut ?? 0) + (repairCompletion.usage.completion_tokens ?? 0);
+              const repCached = (repairCompletion.usage as unknown as { prompt_tokens_details?: { cached_tokens?: number } })
+                ?.prompt_tokens_details?.cached_tokens;
+              if (repCached !== undefined) {
+                tokensCached = (tokensCached ?? 0) + repCached;
+              }
+            }
+          } catch (repairErr) {
+            const bad = new BadJSONError(
+              `Failed to parse JSON after repair attempt: ${(repairErr as Error).message}`,
+              { model: `${this.name}:${modelId}`, cause: repairErr },
+            );
+            bad.rawText = repairText;
+            throw bad;
+          }
+        }
+      }
 
       const toolCalls: ToolCall[] = [];
       if (message?.tool_calls && Array.isArray(message.tool_calls)) {
@@ -188,13 +258,6 @@ export class OpenAICompatProvider implements Provider {
           }
         }
       }
-
-      const usage = completion.usage;
-      const tokensIn = usage?.prompt_tokens ?? null;
-      const tokensOut = usage?.completion_tokens ?? null;
-      const cached = (usage as unknown as { prompt_tokens_details?: { cached_tokens?: number } })
-        ?.prompt_tokens_details?.cached_tokens;
-      const tokensCached = cached ?? (tokensIn !== null ? 0 : null);
 
       return {
         text,
