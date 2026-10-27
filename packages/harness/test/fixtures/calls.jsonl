@@ -1,0 +1,4 @@
+{"call_id": "c_call1", "cost_usd": 0.0012, "model": "main"}
+{"call_id": "c_call2", "cost_usd": null, "model": "agy-cli:gemini-3.8-flash-high"}
+{"call_id": "c_call3", "cost_usd": 0.0035, "model": "main"}
+{"call_id": "c_call4", "cost_usd": 0.0, "model": "cheap"}
