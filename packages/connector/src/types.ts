@@ -50,6 +50,8 @@ export interface ChatOptions {
   tag?: string | undefined;
   signal?: AbortSignal | undefined;
   fetch?: typeof fetch | undefined;
+  stop?: string | string[] | null | undefined;
+  n?: number | null | undefined;
 }
 
 export interface EmbedOptions {
@@ -58,10 +60,16 @@ export interface EmbedOptions {
   signal?: AbortSignal | undefined;
 }
 
-export function createReply(data: Omit<Reply, "json">): Reply {
+export function createReply(
+  data: Omit<Reply, "json"> & { json?: (<T = unknown>() => T) | undefined },
+): Reply {
+  const customJson = data.json;
   return {
     ...data,
     json<T = unknown>(): T {
+      if (customJson) {
+        return customJson.call(this) as T;
+      }
       try {
         return JSON.parse(this.text) as T;
       } catch (err) {
