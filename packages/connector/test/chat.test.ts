@@ -209,7 +209,7 @@ describe("chat", () => {
     };
 
     await expect(
-      chat("main", [{ role: "user", content: "Hello" }], { fetch: fakeFetch }),
+      chat("nebius:nvidia/nemotron-3-super-120b-a12b", [{ role: "user", content: "Hello" }], { fetch: fakeFetch }),
     ).rejects.toThrow(AuthError);
   });
 
@@ -238,7 +238,7 @@ describe("chat", () => {
     };
 
     try {
-      await chat("main", [{ role: "user", content: "Hello" }], { fetch: fakeFetch });
+      await chat("nebius:nvidia/nemotron-3-super-120b-a12b", [{ role: "user", content: "Hello" }], { fetch: fakeFetch, sleep: async () => {} });
       expect.fail("should have thrown RateLimitError");
     } catch (err) {
       expect(err).toBeInstanceOf(RateLimitError);
@@ -255,7 +255,7 @@ describe("chat", () => {
     };
 
     await expect(
-      chat("main", [{ role: "user", content: "Hello" }], { fetch: fakeFetch }),
+      chat("nebius:nvidia/nemotron-3-super-120b-a12b", [{ role: "user", content: "Hello" }], { fetch: fakeFetch, sleep: async () => {} }),
     ).rejects.toThrow(ProviderError);
   });
 
@@ -265,7 +265,7 @@ describe("chat", () => {
     };
 
     await expect(
-      chat("main", [{ role: "user", content: "Hello" }], { fetch: fakeFetch }),
+      chat("nebius:nvidia/nemotron-3-super-120b-a12b", [{ role: "user", content: "Hello" }], { fetch: fakeFetch, sleep: async () => {} }),
     ).rejects.toThrow(ProviderTimeout);
   });
 });
