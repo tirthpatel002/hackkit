@@ -4,3 +4,4 @@ cases: cases/
 concurrency: 8
 case_timeout_s: 30
 judge_model: judge
+rubrics: rubrics.yaml

@@ -1,0 +1,98 @@
+{
+  "schema": 1,
+  "project": "echo",
+  "run_id": "2026-10-28T1200_main_change",
+  "started_at": "2026-10-28T12:00:02+05:30",
+  "git_sha": "b2c3d4e",
+  "model": "main+change",
+  "judge_model": "judge",
+  "cases_file": "cases/",
+  "concurrency": 8,
+  "summary": {
+    "total": 4,
+    "passed": 2,
+    "failed": 2,
+    "errored": 0,
+    "skipped": 0,
+    "pass_rate": 0.5,
+    "cost_usd": 0.0412,
+    "judge_cost_usd": 0.012,
+    "wall_time_s": 71.4,
+    "p50_case_ms": 2800,
+    "p95_case_ms": 5200
+  },
+  "cases": [
+    {
+      "id": "echo-001-shout",
+      "kind": "answer",
+      "passed": false,
+      "cost_usd": 0.001,
+      "judge_cost_usd": 0.0,
+      "time_ms": 110,
+      "error": null,
+      "checks": [
+        {
+          "type": "exact",
+          "passed": false,
+          "score": 0,
+          "reason": "mismatch"
+        }
+      ],
+      "output": "hello"
+    },
+    {
+      "id": "echo-002-capital",
+      "kind": "answer",
+      "passed": true,
+      "cost_usd": 0.001,
+      "judge_cost_usd": 0.0,
+      "time_ms": 210,
+      "error": null,
+      "checks": [
+        {
+          "type": "contains",
+          "passed": true,
+          "score": 1,
+          "reason": ""
+        }
+      ],
+      "output": "Paris"
+    },
+    {
+      "id": "echo-003-explain",
+      "kind": "answer",
+      "passed": true,
+      "cost_usd": 0.002,
+      "judge_cost_usd": 0.005,
+      "time_ms": 1400,
+      "error": null,
+      "checks": [
+        {
+          "type": "judge",
+          "passed": true,
+          "score": 5,
+          "reason": "Good explanation"
+        }
+      ],
+      "output": "Sunlight scatters off air molecules and blue light scatters most."
+    },
+    {
+      "id": "echo-014-long-input",
+      "kind": "answer",
+      "passed": false,
+      "cost_usd": 0.001,
+      "judge_cost_usd": 0.0,
+      "time_ms": 480,
+      "error": null,
+      "checks": [
+        {
+          "type": "maxLength",
+          "passed": false,
+          "score": 0,
+          "reason": "Too long"
+        }
+      ],
+      "output": "Still too long..."
+    }
+  ]
+}

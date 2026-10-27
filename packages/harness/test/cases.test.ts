@@ -13,12 +13,14 @@ describe("cases loader", () => {
   it("accepts echo basic cases", () => {
     resetRegistry();
     const cases = loadCases("cases/basic.yaml", echoProjectDir);
-    expect(cases.length).toBe(2);
+    expect(cases.length).toBe(3);
     expect(cases[0]?.id).toBe("echo-001-shout");
     expect(cases[0]?.kind).toBe("answer");
     expect(cases[0]?.check.length).toBe(2);
     expect(cases[1]?.id).toBe("echo-002-capital");
     expect(cases[1]?.tags).toEqual(["smoke"]);
+    expect(cases[2]?.id).toBe("echo-003-explain");
+    expect(cases[2]?.check.some((c) => c.type === "judge")).toBe(true);
   });
 
   it("loads from a directory of yaml files", () => {

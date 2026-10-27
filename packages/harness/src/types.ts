@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { chat as connectorChat } from "@hackkit/connector";
 
 // ---- cases ----
 export type CaseKind = "answer" | "trace";
@@ -61,8 +62,7 @@ export interface CheckResult {
   costUsd?: number;
 }
 
-/** Local minimal ChatFn definition for H1. H2 will wire @hackkit/connector. */
-export type ChatFn = (model: string, messages: unknown[], opts?: unknown) => Promise<unknown>;
+export type ChatFn = typeof connectorChat;
 
 export interface CheckContext {
   case: Case;
@@ -71,6 +71,7 @@ export interface CheckContext {
   chat: ChatFn;
   signal: AbortSignal;
   projectDir?: string;
+  rubricsPath?: string;
 }
 
 export interface CheckPlugin<O = Record<string, unknown>> {
@@ -144,6 +145,7 @@ export interface RunOptions {
   model?: string;
   concurrency?: number;
   tags?: string[];
+  chat?: ChatFn;
 }
 
 export interface HarnessConfig {
@@ -157,6 +159,22 @@ export interface HarnessConfig {
   rubrics?: string;
 }
 
+// ---- compare ----
+export interface CompareResult {
+  a: ResultsFile;
+  b: ResultsFile;
+  passRate: { a: number; b: number; deltaPts: number };
+  cost: { a: number; b: number; deltaPct: number };
+  wallTime: { a: number; b: number; deltaPct: number };
+  fixed: string[];
+  broke: string[];
+  stillFailing: string[];
+  onlyInA: string[];
+  onlyInB: string[];
+  warnings: string[];
+  outPath: string;
+}
+
 // ---- Zod schemas for results validation ----
 export const CheckResultSchema = z.object({
   type: z.string(),
@@ -168,7 +186,7 @@ export const CheckResultSchema = z.object({
 
 export const CaseResultJsonSchema = z.object({
   id: z.string(),
-  kind: z.enum(["answer", "trace"]),
+  kind: z.enum(["answer", "trace"]).optional().default("answer"),
   passed: z.boolean(),
   cost_usd: z.number(),
   judge_cost_usd: z.number(),
@@ -200,7 +218,7 @@ export const ResultsFileSchema = z.object({
   started_at: z.string(),
   git_sha: z.string(),
   model: z.string(),
-  judge_model: z.string(),
+  judge_model: z.string().optional().default("judge"),
   cases_file: z.string(),
   concurrency: z.number().optional(),
   summary: ResultsSummarySchema,

@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import YAML from "yaml";
+import { chat as connectorChat, type ChatOptions, type Message, type Reply } from "@hackkit/connector";
 import { loadCases } from "./cases.js";
 import { ConfigError } from "./errors.js";
 import { runPool } from "./pool.js";
@@ -30,9 +31,41 @@ import type {
   RunOptions,
 } from "./types.js";
 
-export const stubChat: ChatFn = async () => {
-  throw new Error("Chat is not available in H1; connector will be wired in H2");
+export const defaultChat: ChatFn = (
+  model: string,
+  messages: Message[],
+  opts?: ChatOptions,
+): Promise<Reply> => {
+  if (process.env.HARNESS_FAKE_JUDGE === "1") {
+    return Promise.resolve({
+      text: JSON.stringify({
+        score: 5,
+        reason: "Matches expected answer.",
+        failed_criteria: [],
+      }),
+      toolCalls: [],
+      tokensIn: 50,
+      tokensOut: 20,
+      costUsd: 0.0001,
+      latencyMs: 10,
+      model: "fake-judge",
+      tokensCached: 0,
+      fallbackUsed: false,
+      attempts: 1,
+      callId: "c_fake_judge",
+      json: <T = unknown>() =>
+        ({
+          score: 5,
+          reason: "Matches expected answer.",
+          failed_criteria: [],
+        }) as unknown as T,
+      raw: {},
+    });
+  }
+  return connectorChat(model, messages, opts);
 };
+
+export const stubChat = defaultChat;
 
 export function resolveField(output: CaseOutput, fieldPath: string = "text"): unknown {
   if (fieldPath === "text") return output.text;
@@ -214,6 +247,11 @@ export async function run(project: string, opts?: RunOptions): Promise<ResultsFi
   const concurrency = opts?.concurrency ?? config.concurrency ?? 8;
   const defaultTimeoutS = config.case_timeout_s ?? 30;
   const model = opts?.model ?? "main";
+  const activeChat = opts?.chat ?? defaultChat;
+  const rubricsRel = config.rubrics ?? "rubrics.yaml";
+  const rubricsPath = path.isAbsolute(rubricsRel)
+    ? rubricsRel
+    : path.resolve(projectDir, rubricsRel);
 
   // 5. Load call logs for cost calculation
   const projectLogsPath = path.join(projectDir, "logs", "calls.jsonl");
@@ -249,6 +287,7 @@ export async function run(project: string, opts?: RunOptions): Promise<ResultsFi
       const elapsedMs = Date.now() - caseStartMs;
 
       const checks: CheckResult[] = [];
+      let caseJudgeCostUsd = 0;
       for (const checkSpec of caseObj.check) {
         const fieldValue = resolveField(caseOutput, checkSpec.field ?? "text");
         const targetText = typeof fieldValue === "string" ? fieldValue : String(fieldValue ?? "");
@@ -262,9 +301,10 @@ export async function run(project: string, opts?: RunOptions): Promise<ResultsFi
         let result = await plugin.run(checkSpec, {
           case: caseObj,
           output: checkOutput,
-          chat: stubChat,
+          chat: activeChat,
           signal,
           projectDir,
+          rubricsPath,
         });
 
         if (checkSpec.negate) {
@@ -276,6 +316,10 @@ export async function run(project: string, opts?: RunOptions): Promise<ResultsFi
               ? (result.reason ? `(negated) ${result.reason}` : "")
               : (result.reason || `Negated check ${checkSpec.type} failed`),
           };
+        }
+
+        if (result.costUsd && typeof result.costUsd === "number") {
+          caseJudgeCostUsd += result.costUsd;
         }
 
         checks.push(result);
@@ -292,11 +336,11 @@ export async function run(project: string, opts?: RunOptions): Promise<ResultsFi
         checks,
         output: truncatedOutput,
         costUsd,
-        judgeCostUsd: 0,
+        judgeCostUsd: caseJudgeCostUsd,
         timeMs: elapsedMs,
         error: null,
         cost_usd: costUsd,
-        judge_cost_usd: 0,
+        judge_cost_usd: caseJudgeCostUsd,
         time_ms: elapsedMs,
       };
     },
@@ -347,7 +391,7 @@ export async function run(project: string, opts?: RunOptions): Promise<ResultsFi
   ).length;
   const passRate = total > 0 ? passed / total : 0;
   const totalCostUsd = caseResults.reduce((acc, c) => acc + c.costUsd, 0);
-  const totalJudgeCostUsd = 0;
+  const totalJudgeCostUsd = caseResults.reduce((acc, c) => acc + c.judgeCostUsd, 0);
 
   const caseTimes = caseResults.map((c) => c.timeMs);
   const p50 = calculatePercentile(caseTimes, 50);

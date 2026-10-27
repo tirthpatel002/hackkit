@@ -1,0 +1,12 @@
+matches-expected:
+  scale: "1-5"
+  criteria:
+    - "Answer matches the expected answer in meaning."
+    - "No invented facts."
+    - "Follows any length or format limit in the input."
+  score_guide:
+    5: "fully correct, nothing extra wrong"
+    4: "correct, minor wording issue"
+    3: "partly correct"
+    2: "mostly wrong"
+    1: "wrong or harmful"

@@ -1,0 +1,36 @@
+{
+  "schema": 1,
+  "project": "echo",
+  "run_id": "run_a",
+  "started_at": "2026-10-28T11:30:02+05:30",
+  "git_sha": "a1b2c3d",
+  "model": "model-a",
+  "judge_model": "judge-model-1",
+  "cases_file": "cases/",
+  "summary": {
+    "total": 1,
+    "passed": 1,
+    "failed": 0,
+    "errored": 0,
+    "skipped": 0,
+    "pass_rate": 1.0,
+    "cost_usd": 0.01,
+    "judge_cost_usd": 0.0,
+    "wall_time_s": 10.0,
+    "p50_case_ms": 100,
+    "p95_case_ms": 100
+  },
+  "cases": [
+    {
+      "id": "case-only-in-a",
+      "kind": "answer",
+      "passed": true,
+      "cost_usd": 0.01,
+      "judge_cost_usd": 0.0,
+      "time_ms": 100,
+      "error": null,
+      "checks": [],
+      "output": "ok"
+    }
+  ]
+}

@@ -1,0 +1,93 @@
+{
+  "schema": 1,
+  "project": "echo",
+  "run_id": "2026-10-28T1130_main",
+  "started_at": "2026-10-28T11:30:02+05:30",
+  "git_sha": "a1b2c3d",
+  "model": "main",
+  "judge_model": "judge",
+  "cases_file": "cases/",
+  "summary": {
+    "total": 4,
+    "passed": 2,
+    "failed": 2,
+    "errored": 0,
+    "skipped": 0,
+    "pass_rate": 0.5,
+    "cost_usd": 0.039,
+    "judge_cost_usd": 0.01,
+    "wall_time_s": 68.2,
+    "p50_case_ms": 2500,
+    "p95_case_ms": 5000
+  },
+  "cases": [
+    {
+      "id": "echo-001-shout",
+      "passed": true,
+      "cost_usd": 0.001,
+      "judge_cost_usd": 0.0,
+      "time_ms": 100,
+      "error": null,
+      "checks": [
+        {
+          "type": "exact",
+          "passed": true,
+          "score": 1,
+          "reason": ""
+        }
+      ],
+      "output": "HELLO"
+    },
+    {
+      "id": "echo-002-capital",
+      "passed": true,
+      "cost_usd": 0.001,
+      "judge_cost_usd": 0.0,
+      "time_ms": 200,
+      "error": null,
+      "checks": [
+        {
+          "type": "contains",
+          "passed": true,
+          "score": 1,
+          "reason": ""
+        }
+      ],
+      "output": "Paris"
+    },
+    {
+      "id": "echo-003-explain",
+      "passed": false,
+      "cost_usd": 0.002,
+      "judge_cost_usd": 0.005,
+      "time_ms": 1500,
+      "error": null,
+      "checks": [
+        {
+          "type": "judge",
+          "passed": false,
+          "score": 2,
+          "reason": "Not explained"
+        }
+      ],
+      "output": "I don't know"
+    },
+    {
+      "id": "echo-014-long-input",
+      "passed": false,
+      "cost_usd": 0.001,
+      "judge_cost_usd": 0.0,
+      "time_ms": 500,
+      "error": null,
+      "checks": [
+        {
+          "type": "maxLength",
+          "passed": false,
+          "score": 0,
+          "reason": "Too long"
+        }
+      ],
+      "output": "Too long text..."
+    }
+  ]
+}
