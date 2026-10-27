@@ -1,8 +1,8 @@
 # hackkit
 
-Private pnpm workspace with two shared TypeScript packages for the hackathon projects (Clearmind, Tastebud, Reflex):
+Private pnpm workspace with two project-agnostic TypeScript packages. Project adapters, cases and model configs live in each project's own repo.
 
-- `packages/connector` (`@hackkit/connector`): one `chat()` and one `embed()` across Nebius Token Factory and Meta Model API, plus a `QlooClient`. Handles keys, retries, fallback, cost and call logging.
+- `packages/connector` (`@hackkit/connector`): one `chat()` and one `embed()` across Nebius Token Factory, Meta Model API and a local CLI provider, plus a `QlooClient`. Handles keys, retries, fallback, cost and call logging.
 - `packages/harness` (`@hackkit/harness`): runs a project's YAML test cases against its agent, grades them (exact / contains / judge / custom), writes a results file, and compares two runs.
 
 ## Setup
@@ -14,5 +14,7 @@ pnpm typecheck && pnpm test
 ```
 
 Tests never need real keys (HTTP is mocked). Live-provider tests run only with `LIVE=1 pnpm test` and the keys present.
+
+Full spec and build plan: [docs/SPEC.md](docs/SPEC.md).
 
 Licence: MIT.
