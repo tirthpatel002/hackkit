@@ -12,6 +12,7 @@
   check:
     - {type: contains, value: "Paris"}
     - {type: contains, value: ["London", "Berlin"], all_of: false, negate: true}
+    - {type: maxLength, chars: 200}
 
 - id: echo-003-explain
   input: {question: "Why is the sky blue? One sentence."}

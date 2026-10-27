@@ -6,7 +6,7 @@ import { chat as connectorChat, type ChatOptions, type Message, type Reply } fro
 import { loadCases } from "./cases.js";
 import { ConfigError } from "./errors.js";
 import { runPool } from "./pool.js";
-import { getCheck } from "./registry.js";
+import { getCheck, registerCheck } from "./registry.js";
 import {
   calculateCost,
   calculatePercentile,
@@ -18,15 +18,18 @@ import {
   writeResultsJson,
 } from "./report.js";
 import type {
+  AgentTrace,
   Case,
   CaseOutput,
   CaseResult,
   CaseResultJson,
   ChatFn,
+  CheckPlugin,
   CheckResult,
   HarnessConfig,
   ResultsFile,
   ResultsSummary,
+  RunAgent,
   RunCase,
   RunOptions,
 } from "./types.js";
@@ -123,8 +126,27 @@ export async function loadCheckPlugins(
 
     const fileUrl = pathToFileURL(resolvedPath).href;
     try {
-      await import(fileUrl);
+      const mod = (await import(fileUrl)) as Record<string, unknown>;
+      // If module exports plugin(s), ensure they are registered (e.g. across test resetRegistry calls)
+      for (const val of Object.values(mod)) {
+        if (
+          val &&
+          typeof val === "object" &&
+          "type" in val &&
+          typeof (val as { type: unknown }).type === "string" &&
+          "run" in val &&
+          typeof (val as { run: unknown }).run === "function"
+        ) {
+          const plugin = val as CheckPlugin<any>;
+          if (!getCheck(plugin.type)) {
+            registerCheck(plugin);
+          }
+        }
+      }
     } catch (err) {
+      if (err instanceof ConfigError) {
+        throw err;
+      }
       throw new ConfigError(
         `Failed to import check plugin ${resolvedPath}: ${err instanceof Error ? err.message : String(err)}`,
         { cause: err },
@@ -166,6 +188,48 @@ export async function loadAdapter(adapterSpec: string, projectDir: string): Prom
   }
 
   return fn as RunCase;
+}
+
+export async function loadAgentAdapter(
+  agentAdapterSpec: string,
+  projectDir: string,
+): Promise<RunAgent> {
+  const colonIndex = agentAdapterSpec.lastIndexOf(":");
+  if (colonIndex === -1 || colonIndex === 0 || colonIndex === agentAdapterSpec.length - 1) {
+    throw new ConfigError(
+      `Invalid agent_adapter spec: "${agentAdapterSpec}". Expected format "file.ts:exportName"`,
+    );
+  }
+  const filePath = agentAdapterSpec.slice(0, colonIndex);
+  const exportName = agentAdapterSpec.slice(colonIndex + 1);
+
+  const resolvedPath = path.isAbsolute(filePath)
+    ? filePath
+    : path.resolve(projectDir, filePath);
+
+  if (!fs.existsSync(resolvedPath)) {
+    throw new ConfigError(`Agent adapter module not found: ${resolvedPath}`);
+  }
+
+  const fileUrl = pathToFileURL(resolvedPath).href;
+  let mod: Record<string, unknown>;
+  try {
+    mod = (await import(fileUrl)) as Record<string, unknown>;
+  } catch (err) {
+    throw new ConfigError(
+      `Failed to load agent adapter module ${resolvedPath}: ${err instanceof Error ? err.message : String(err)}`,
+      { cause: err },
+    );
+  }
+
+  const fn = mod[exportName];
+  if (typeof fn !== "function") {
+    throw new ConfigError(
+      `Export "${exportName}" not found or not a function in agent adapter ${resolvedPath}`,
+    );
+  }
+
+  return fn as RunAgent;
 }
 
 export function loadHarnessConfig(projectDir: string): HarnessConfig {
@@ -231,17 +295,24 @@ export async function run(project: string, opts?: RunOptions): Promise<ResultsFi
     cases = cases.filter((c) => c.tags?.some((t) => opts.tags!.includes(t)));
   }
 
-  // Reject trace cases in H1
-  for (const c of cases) {
-    if (c.kind === "trace") {
-      throw new ConfigError(
-        `Trace cases are not supported in H1 (case "${c.id}"); trace cases come in X1`,
-      );
-    }
+  // 3. Load adapter(s)
+  let adapter: RunCase | undefined;
+  if (config.adapter) {
+    adapter = await loadAdapter(config.adapter, projectDir);
+  }
+  let agentAdapter: RunAgent | undefined;
+  if (config.agent_adapter) {
+    agentAdapter = await loadAgentAdapter(config.agent_adapter, projectDir);
   }
 
-  // 3. Load adapter
-  const adapter = await loadAdapter(config.adapter, projectDir);
+  const hasTraceCases = cases.some((c) => c.kind === "trace");
+  if (hasTraceCases && !agentAdapter) {
+    throw new ConfigError("Trace cases present but agent_adapter not configured in harness.yaml");
+  }
+  const hasAnswerCases = cases.some((c) => (c.kind ?? "answer") === "answer");
+  if (hasAnswerCases && !adapter) {
+    throw new ConfigError("Answer cases present but adapter not configured in harness.yaml");
+  }
 
   // 4. Concurrency & Timeout
   const concurrency = opts?.concurrency ?? config.concurrency ?? 8;
@@ -265,10 +336,11 @@ export async function run(project: string, opts?: RunOptions): Promise<ResultsFi
     concurrency,
     getTimeoutMs: (c) => (c.timeout_s ?? defaultTimeoutS) * 1000,
     task: async (caseObj, { signal }) => {
+      const isTrace = caseObj.kind === "trace";
       if (caseObj.skip) {
         return {
           id: caseObj.id,
-          kind: "answer",
+          kind: isTrace ? "trace" : "answer",
           passed: false,
           checks: [],
           output: "",
@@ -283,7 +355,24 @@ export async function run(project: string, opts?: RunOptions): Promise<ResultsFi
       }
 
       const caseStartMs = Date.now();
-      const caseOutput = await adapter(caseObj.input, { model, signal });
+      let caseOutput: CaseOutput;
+      let trace: AgentTrace | undefined;
+
+      if (isTrace) {
+        const maxStepsCheck = caseObj.check.find((c) => c.type === "maxSteps");
+        const maxSteps =
+          typeof (maxStepsCheck as Record<string, unknown> | undefined)?.value === "number"
+            ? ((maxStepsCheck as Record<string, unknown>).value as number)
+            : undefined;
+        trace = await agentAdapter!(caseObj.input, {
+          model,
+          signal,
+          ...(maxSteps !== undefined ? { maxSteps } : {}),
+        });
+        caseOutput = trace.final;
+      } else {
+        caseOutput = await adapter!(caseObj.input, { model, signal });
+      }
       const elapsedMs = Date.now() - caseStartMs;
 
       const checks: CheckResult[] = [];
@@ -301,6 +390,7 @@ export async function run(project: string, opts?: RunOptions): Promise<ResultsFi
         let result = await plugin.run(checkSpec, {
           case: caseObj,
           output: checkOutput,
+          ...(trace !== undefined ? { trace } : {}),
           chat: activeChat,
           signal,
           projectDir,
@@ -313,8 +403,10 @@ export async function run(project: string, opts?: RunOptions): Promise<ResultsFi
             ...result,
             passed,
             reason: passed
-              ? (result.reason ? `(negated) ${result.reason}` : "")
-              : (result.reason || `Negated check ${checkSpec.type} failed`),
+              ? result.reason
+                ? `(negated) ${result.reason}`
+                : ""
+              : result.reason || `Negated check ${checkSpec.type} failed`,
           };
         }
 
@@ -331,10 +423,11 @@ export async function run(project: string, opts?: RunOptions): Promise<ResultsFi
 
       return {
         id: caseObj.id,
-        kind: "answer",
+        kind: isTrace ? "trace" : "answer",
         passed,
         checks,
         output: truncatedOutput,
+        ...(isTrace && trace ? { steps: trace.steps.length } : {}),
         costUsd,
         judgeCostUsd: caseJudgeCostUsd,
         timeMs: elapsedMs,
@@ -348,7 +441,7 @@ export async function run(project: string, opts?: RunOptions): Promise<ResultsFi
       const timeoutMs = (caseObj.timeout_s ?? defaultTimeoutS) * 1000;
       return {
         id: caseObj.id,
-        kind: "answer",
+        kind: caseObj.kind ?? "answer",
         passed: false,
         checks: [],
         output: "",
@@ -365,7 +458,7 @@ export async function run(project: string, opts?: RunOptions): Promise<ResultsFi
       const errorStr = err instanceof Error ? err.message : String(err);
       return {
         id: caseObj.id,
-        kind: "answer",
+        kind: caseObj.kind ?? "answer",
         passed: false,
         checks: [],
         output: "",

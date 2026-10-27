@@ -61,6 +61,37 @@ export function validateCase(raw: unknown, source: string): Case {
         );
       }
     }
+
+    if (check.type === "finalOutput") {
+      const nestedSpec = (check as Record<string, unknown>).check as
+        | Record<string, unknown>
+        | undefined;
+      if (nestedSpec && typeof nestedSpec === "object" && typeof nestedSpec.type === "string") {
+        const nestedPlugin = getCheck(nestedSpec.type);
+        if (!nestedPlugin) {
+          throw new ConfigError(
+            `Unknown check type "${nestedSpec.type}" in finalOutput of case "${caseObj.id}" (${source})`,
+          );
+        }
+        if (nestedPlugin.needsTrace) {
+          throw new ConfigError(
+            `Trace-only check "${nestedSpec.type}" cannot be used inside finalOutput in case "${caseObj.id}" (${source})`,
+          );
+        }
+        if (nestedPlugin.options) {
+          const nestedOptResult = nestedPlugin.options.safeParse(nestedSpec);
+          if (!nestedOptResult.success) {
+            const issue = nestedOptResult.error.issues[0];
+            const msg = issue
+              ? `${issue.path.join(".")}: ${issue.message}`
+              : nestedOptResult.error.message;
+            throw new ConfigError(
+              `Bad options for nested check "${nestedSpec.type}" in finalOutput of case "${caseObj.id}" (${source}): ${msg}`,
+            );
+          }
+        }
+      }
+    }
   }
 
   return caseObj;
