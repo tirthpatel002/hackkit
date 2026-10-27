@@ -30,3 +30,10 @@ export {
 } from "./log.js";
 export * from "./types.js";
 export * from "./errors.js";
+export {
+  QlooClient,
+  type QlooEntity,
+  type QlooTag,
+  type QlooInsightsOptions,
+  type QlooClientOptions,
+} from "./qloo.js";
