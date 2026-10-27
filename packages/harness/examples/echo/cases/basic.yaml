@@ -1,0 +1,14 @@
+- id: echo-001-shout
+  input: {text: "hello"}
+  expect: "HELLO"
+  check:
+    - {type: exact, value: "HELLO"}
+    - {type: custom, fn: "src/checks.ts:isUpperCase"}
+
+- id: echo-002-capital
+  tags: [smoke]
+  input: {question: "What is the capital of France?"}
+  expect: "Paris"
+  check:
+    - {type: contains, value: "Paris"}
+    - {type: contains, value: ["London", "Berlin"], all_of: false, negate: true}
