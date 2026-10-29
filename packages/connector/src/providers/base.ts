@@ -10,6 +10,12 @@ export interface ProviderChatResult {
   httpStatus?: number | undefined;
   exitCode?: number | null | undefined;
   json?: (<T = unknown>() => T) | undefined;
+  /** Provider finish reason, e.g. "stop", "length", "tool_calls". */
+  finishReason?: string | null | undefined;
+  /** True when the reply was cut off by max_tokens. */
+  truncated?: boolean | undefined;
+  /** Reasoning text (reasoning_content / reasoning), if the provider returned it. */
+  reasoning?: string | null | undefined;
 }
 
 export interface Provider {

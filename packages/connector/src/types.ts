@@ -38,6 +38,12 @@ export interface Reply {
   callId: string;
   json<T = unknown>(): T;
   raw: unknown;
+  /** Provider finish reason, e.g. "stop", "length", "tool_calls"; null if unknown. */
+  finishReason?: string | null;
+  /** True when the model stopped because it hit max_tokens. */
+  truncated?: boolean;
+  /** Reasoning text if the provider returned it, else null. */
+  reasoning?: string | null;
 }
 
 export interface ChatOptions {
@@ -72,11 +78,19 @@ export interface EmbedResult extends Array<Float32Array> {
 }
 
 export function createReply(
-  data: Omit<Reply, "json"> & { json?: (<T = unknown>() => T) | undefined },
+  data: Omit<Reply, "json"> & {
+    json?: (<T = unknown>() => T) | undefined;
+    finishReason?: string | null | undefined;
+    truncated?: boolean | undefined;
+    reasoning?: string | null | undefined;
+  },
 ): Reply {
   const customJson = data.json;
   return {
     ...data,
+    finishReason: data.finishReason ?? null,
+    truncated: data.truncated ?? false,
+    reasoning: data.reasoning ?? null,
     json<T = unknown>(): T {
       if (customJson) {
         return customJson.call(this) as T;

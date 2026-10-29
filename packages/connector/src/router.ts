@@ -20,6 +20,7 @@ import {
   ProviderError,
   ProviderTimeout,
   BadJSONError,
+  TruncatedError,
 } from "./errors.js";
 import type { Provider } from "./providers/base.js";
 import { NebiusProvider } from "./providers/nebius.js";
@@ -322,7 +323,11 @@ export async function chat(
           json_mode: jsonMode,
           prompt_sha: promptSha,
           error: null,
-          ...(priceMissing && !isCli ? { warning: "price_missing" } : {}),
+          ...(result.truncated
+            ? { warning: priceMissing && !isCli ? "truncated,price_missing" : "truncated" }
+            : priceMissing && !isCli
+              ? { warning: "price_missing" }
+              : {}),
         });
 
         return createReply({
@@ -339,6 +344,9 @@ export async function chat(
           callId,
           raw: result.raw,
           json: result.json,
+          finishReason: result.finishReason ?? null,
+          truncated: result.truncated ?? false,
+          reasoning: result.reasoning ?? null,
         });
       } catch (err) {
         const latencyMs = Date.now() - attemptStartTime;
@@ -362,7 +370,15 @@ export async function chat(
       lastError = connectorErr;
 
         // 400/404/413/422, tool-call parse error, or tools sent to CLI: No retry, no fallback!
-        if (connectorErr instanceof BadRequestError || connectorErr instanceof BadJSONError) {
+        if (
+          connectorErr instanceof BadRequestError ||
+          connectorErr instanceof BadJSONError ||
+          connectorErr instanceof TruncatedError
+        ) {
+          const spent = connectorErr.usage;
+          const spentCost = spent
+            ? calculateCost(resolved.fullName, spent.tokensIn, spent.tokensOut, spent.tokensCached).costUsd
+            : null;
           appendLog({
             ts: formatIsoWithOffset(new Date()),
             call_id: callId,
@@ -376,10 +392,10 @@ export async function chat(
             status: "failed",
             error_type: connectorErr.name,
             http_status: status,
-            tokens_in: null,
-            tokens_cached: null,
-            tokens_out: null,
-            cost_usd: null,
+            tokens_in: spent?.tokensIn ?? null,
+            tokens_cached: spent?.tokensCached ?? null,
+            tokens_out: spent?.tokensOut ?? null,
+            cost_usd: spentCost,
             latency_ms: latencyMs,
             n_messages: nMessages,
             n_tools: nTools,

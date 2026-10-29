@@ -1,4 +1,14 @@
+/** Token usage of requests that got a response before the error was raised. */
+export interface TokenUsage {
+  tokensIn: number | null;
+  tokensOut: number | null;
+  tokensCached: number | null;
+}
+
 export class ConnectorError extends Error {
+  /** Set when the provider answered (tokens were spent) but the call still failed. */
+  usage?: TokenUsage | undefined;
+
   constructor(
     message: string,
     readonly opts: { model?: string; status?: number; cause?: unknown } = {},
@@ -35,6 +45,13 @@ export class ProviderError extends ConnectorError {
 /** json: true and the reply text did not parse. */
 export class BadJSONError extends ConnectorError {
   rawText = "";
+}
+
+/** The model stopped at max_tokens (finish_reason "length") with no text and no tool calls. Not retried. */
+export class TruncatedError extends ConnectorError {
+  finishReason: string | null = "length";
+  /** Reasoning text, if the provider returned any. */
+  reasoning: string | null = null;
 }
 
 /** Every model in the chain failed. */

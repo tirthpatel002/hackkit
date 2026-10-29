@@ -10,7 +10,16 @@ import {
   ProviderTimeout,
   ProviderError,
   BadJSONError,
+  TruncatedError,
+  type TokenUsage,
 } from "../errors.js";
+
+function readReasoning(message: unknown): string | null {
+  if (!message || typeof message !== "object") return null;
+  const m = message as { reasoning_content?: unknown; reasoning?: unknown };
+  const r = m.reasoning_content ?? m.reasoning;
+  return typeof r === "string" && r.length > 0 ? r : null;
+}
 
 export interface OpenAICompatConfig {
   baseUrl: string;
@@ -185,6 +194,22 @@ export class OpenAICompatProvider implements Provider {
       const cached = (usage as unknown as { prompt_tokens_details?: { cached_tokens?: number } })
         ?.prompt_tokens_details?.cached_tokens;
       let tokensCached = cached ?? (tokensIn !== null ? 0 : null);
+      const usageNow = (): TokenUsage => ({ tokensIn, tokensOut, tokensCached });
+
+      // Cut off by max_tokens with nothing usable (typical when a reasoning model spends the budget thinking).
+      if (
+        choice?.finish_reason === "length" &&
+        text === "" &&
+        !(message?.tool_calls && message.tool_calls.length > 0)
+      ) {
+        const trunc = new TruncatedError(
+          `Model stopped at max_tokens (finish_reason "length") with empty text; raise maxTokens or lower reasoning.`,
+          { model: `${this.name}:${modelId}` },
+        );
+        trunc.reasoning = readReasoning(message);
+        trunc.usage = usageNow();
+        throw trunc;
+      }
 
       if (opts?.json && !(message?.tool_calls && message.tool_calls.length > 0 && text === "")) {
         try {
@@ -224,11 +249,16 @@ export class OpenAICompatProvider implements Provider {
               }
             }
           } catch (repairErr) {
+            if (repairCompletion.usage) {
+              tokensIn = (tokensIn ?? 0) + (repairCompletion.usage.prompt_tokens ?? 0);
+              tokensOut = (tokensOut ?? 0) + (repairCompletion.usage.completion_tokens ?? 0);
+            }
             const bad = new BadJSONError(
               `Failed to parse JSON after repair attempt: ${(repairErr as Error).message}`,
               { model: `${this.name}:${modelId}`, cause: repairErr },
             );
             bad.rawText = repairText;
+            bad.usage = usageNow();
             throw bad;
           }
         }
@@ -248,6 +278,7 @@ export class OpenAICompatProvider implements Provider {
                 { model: `${this.name}:${modelId}`, cause: parseErr },
               );
               bad.rawText = rawArgs;
+              bad.usage = usageNow();
               throw bad;
             }
             toolCalls.push({
@@ -267,6 +298,9 @@ export class OpenAICompatProvider implements Provider {
         tokensCached,
         raw: completion,
         httpStatus: 200,
+        finishReason: choice?.finish_reason ?? null,
+        truncated: choice?.finish_reason === "length",
+        reasoning: readReasoning(message),
       };
     } catch (err) {
       throw mapOpenAIError(err, `${this.name}:${modelId}`);
